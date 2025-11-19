@@ -8,6 +8,39 @@ const (
 	StatusDeleted    Status = "deleted"
 )
 
+type ServerDistributionType string
+
+const (
+	DistributionRemote ServerDistributionType = "remote"
+	DistributionNpm    ServerDistributionType = "npm"
+	DistributionPypi   ServerDistributionType = "pypi"
+	DistributionOci    ServerDistributionType = "oci"
+	DistributionNuget  ServerDistributionType = "nuget"
+	DistributionMcpb   ServerDistributionType = "mcpb"
+)
+
+// ValidDistributionTypes returns all valid distribution type values
+func ValidDistributionTypes() []ServerDistributionType {
+	return []ServerDistributionType{
+		DistributionRemote,
+		DistributionNpm,
+		DistributionPypi,
+		DistributionOci,
+		DistributionNuget,
+		DistributionMcpb,
+	}
+}
+
+// IsValidDistributionType checks if a string is a valid distribution type
+func IsValidDistributionType(s string) bool {
+	switch ServerDistributionType(s) {
+	case DistributionRemote, DistributionNpm, DistributionPypi, DistributionOci, DistributionNuget, DistributionMcpb:
+		return true
+	default:
+		return false
+	}
+}
+
 type Transport struct {
 	Type    string          `json:"type" doc:"Transport type (stdio, streamable-http, or sse)" example:"stdio"`
 	URL     string          `json:"url,omitempty" doc:"URL for streamable-http or sse transports" example:"https://api.example.com/mcp"`

@@ -131,6 +131,21 @@ func (db *PostgreSQL) ListServers(
 			args = append(args, *filter.IsLatest)
 			argIndex++
 		}
+		if filter.ConfigType != nil {
+			switch *filter.ConfigType {
+			case string(model.DistributionRemote):
+				// Check if remotes array has at least one element
+				whereConditions = append(whereConditions, "jsonb_array_length(COALESCE(value->'remotes', '[]'::jsonb)) > 0")
+			case string(model.DistributionNpm), string(model.DistributionPypi), string(model.DistributionOci), string(model.DistributionNuget), string(model.DistributionMcpb):
+				// Check if packages array contains at least one package with the specified registryType
+				whereConditions = append(whereConditions, fmt.Sprintf(
+					"EXISTS (SELECT 1 FROM jsonb_array_elements(value->'packages') AS pkg WHERE pkg->>'registryType' = $%d)",
+					argIndex,
+				))
+				args = append(args, *filter.ConfigType)
+				argIndex++
+			}
+		}
 	}
 
 	// Add cursor pagination using compound serverName:version cursor

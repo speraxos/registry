@@ -12,6 +12,7 @@ import (
 	"github.com/modelcontextprotocol/registry/internal/database"
 	"github.com/modelcontextprotocol/registry/internal/service"
 	apiv0 "github.com/modelcontextprotocol/registry/pkg/api/v0"
+	"github.com/modelcontextprotocol/registry/pkg/model"
 )
 
 const errRecordNotFound = "record not found"
@@ -23,6 +24,7 @@ type ListServersInput struct {
 	UpdatedSince string `query:"updated_since" doc:"Filter servers updated since timestamp (RFC3339 datetime)" required:"false" example:"2025-08-07T13:15:04.280Z"`
 	Search       string `query:"search" doc:"Search servers by name (substring match)" required:"false" example:"filesystem"`
 	Version      string `query:"version" doc:"Filter by version ('latest' for latest version, or an exact version like '1.2.3')" required:"false" example:"latest"`
+	Type         string `query:"type" doc:"Filter by distribution type: 'remote' for remote transports, or package type ('npm', 'pypi', 'oci', 'nuget', 'mcpb')" required:"false" example:"remote"`
 }
 
 // ServerDetailInput represents the input for getting server details
@@ -80,6 +82,15 @@ func RegisterServersEndpoints(api huma.API, pathPrefix string, registry service.
 				// Future: exact version matching
 				filter.Version = &input.Version
 			}
+		}
+
+		// Handle type parameter
+		if input.Type != "" {
+			// Validate that the type is a valid distribution type
+			if !model.IsValidDistributionType(input.Type) {
+				return nil, huma.Error400BadRequest("Invalid type parameter: must be one of 'remote', 'npm', 'pypi', 'oci', 'nuget', or 'mcpb'")
+			}
+			filter.ConfigType = &input.Type
 		}
 
 		// Get paginated results with filtering

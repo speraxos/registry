@@ -518,3 +518,280 @@ func TestServersEndpointEdgeCases(t *testing.T) {
 		}
 	})
 }
+
+func TestListServersWithTypeFilter(t *testing.T) {
+	ctx := context.Background()
+	registryService := service.NewRegistryService(database.NewTestDB(t), config.NewConfig())
+
+	// Setup test data with different distribution types
+
+	// Server with remote only
+	_, err := registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/remote-only",
+		Description: "Server with remote transport only",
+		Version:     "1.0.0",
+		Remotes: []model.Transport{
+			{
+				Type: "streamable-http",
+				URL:  "https://example.com/mcp",
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Server with npm package
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/npm-server",
+		Description: "Server with npm package",
+		Version:     "1.0.0",
+		Packages: []model.Package{
+			{
+				RegistryType: "npm",
+				Identifier:   "@example/mcp-server",
+				Version:      "1.0.0",
+				Transport: model.Transport{
+					Type: "stdio",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Server with pypi package
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/pypi-server",
+		Description: "Server with pypi package",
+		Version:     "1.0.0",
+		Packages: []model.Package{
+			{
+				RegistryType: "pypi",
+				Identifier:   "example-mcp-server",
+				Version:      "1.0.0",
+				Transport: model.Transport{
+					Type: "stdio",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Server with OCI package
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/oci-server",
+		Description: "Server with OCI container",
+		Version:     "1.0.0",
+		Packages: []model.Package{
+			{
+				RegistryType: "oci",
+				Identifier:   "ghcr.io/example/mcp-server:1.0.0",
+				Transport: model.Transport{
+					Type: "stdio",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Server with NuGet package
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/nuget-server",
+		Description: "Server with NuGet package",
+		Version:     "1.0.0",
+		Packages: []model.Package{
+			{
+				RegistryType: "nuget",
+				Identifier:   "Example.MCP.Server",
+				Version:      "1.0.0",
+				Transport: model.Transport{
+					Type: "stdio",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Server with MCPB package
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/mcpb-server",
+		Description: "Server with MCPB package",
+		Version:     "1.0.0",
+		Packages: []model.Package{
+			{
+				RegistryType: "mcpb",
+				Identifier:   "https://example.com/server.mcpb",
+				FileSHA256:   "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+				Transport: model.Transport{
+					Type: "stdio",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Server with both remote and package
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/mixed-server",
+		Description: "Server with both remote and package",
+		Version:     "1.0.0",
+		Remotes: []model.Transport{
+			{
+				Type: "sse",
+				URL:  "https://example.com/sse",
+			},
+		},
+		Packages: []model.Package{
+			{
+				RegistryType: "npm",
+				Identifier:   "@example/mixed-server",
+				Version:      "1.0.0",
+				Transport: model.Transport{
+					Type: "stdio",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Server with multiple package types
+	_, err = registryService.CreateServer(ctx, &apiv0.ServerJSON{
+		Schema:      model.CurrentSchemaURL,
+		Name:        "com.example/multi-package",
+		Description: "Server with multiple package types",
+		Version:     "1.0.0",
+		Packages: []model.Package{
+			{
+				RegistryType: "npm",
+				Identifier:   "@example/multi-server",
+				Version:      "1.0.0",
+				Transport: model.Transport{
+					Type: "stdio",
+				},
+			},
+			{
+				RegistryType: "pypi",
+				Identifier:   "example-multi-server",
+				Version:      "1.0.0",
+				Transport: model.Transport{
+					Type: "stdio",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	// Create API
+	mux := http.NewServeMux()
+	api := humago.New(mux, huma.DefaultConfig("Test API", "1.0.0"))
+	v0.RegisterServersEndpoints(api, "/v0", registryService)
+
+	tests := []struct {
+		name            string
+		queryParams     string
+		expectedStatus  int
+		expectedCount   int
+		expectedError   string
+		expectedServers []string
+	}{
+		{
+			name:            "filter by remote type",
+			queryParams:     "?type=remote",
+			expectedStatus:  http.StatusOK,
+			expectedCount:   2,
+			expectedServers: []string{"com.example/remote-only", "com.example/mixed-server"},
+		},
+		{
+			name:            "filter by npm type",
+			queryParams:     "?type=npm",
+			expectedStatus:  http.StatusOK,
+			expectedCount:   3,
+			expectedServers: []string{"com.example/npm-server", "com.example/mixed-server", "com.example/multi-package"},
+		},
+		{
+			name:            "filter by pypi type",
+			queryParams:     "?type=pypi",
+			expectedStatus:  http.StatusOK,
+			expectedCount:   2,
+			expectedServers: []string{"com.example/pypi-server", "com.example/multi-package"},
+		},
+		{
+			name:            "filter by oci type",
+			queryParams:     "?type=oci",
+			expectedStatus:  http.StatusOK,
+			expectedCount:   1,
+			expectedServers: []string{"com.example/oci-server"},
+		},
+		{
+			name:            "filter by nuget type",
+			queryParams:     "?type=nuget",
+			expectedStatus:  http.StatusOK,
+			expectedCount:   1,
+			expectedServers: []string{"com.example/nuget-server"},
+		},
+		{
+			name:            "filter by mcpb type",
+			queryParams:     "?type=mcpb",
+			expectedStatus:  http.StatusOK,
+			expectedCount:   1,
+			expectedServers: []string{"com.example/mcpb-server"},
+		},
+		{
+			name:           "invalid type parameter",
+			queryParams:    "?type=invalid",
+			expectedStatus: http.StatusBadRequest,
+			expectedError:  "Invalid type parameter",
+		},
+		{
+			name:            "combine type with search",
+			queryParams:     "?type=npm&search=npm",
+			expectedStatus:  http.StatusOK,
+			expectedCount:   1,
+			expectedServers: []string{"com.example/npm-server"},
+		},
+		{
+			name:            "combine type with version",
+			queryParams:     "?type=remote&version=latest",
+			expectedStatus:  http.StatusOK,
+			expectedCount:   2,
+			expectedServers: []string{"com.example/remote-only", "com.example/mixed-server"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/v0/servers"+tt.queryParams, nil)
+			w := httptest.NewRecorder()
+
+			mux.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.expectedStatus == http.StatusOK {
+				var resp apiv0.ServerListResponse
+				err := json.NewDecoder(w.Body).Decode(&resp)
+				assert.NoError(t, err)
+				assert.Len(t, resp.Servers, tt.expectedCount)
+				assert.Equal(t, tt.expectedCount, resp.Metadata.Count)
+
+				// Verify the expected servers are returned
+				if tt.expectedServers != nil {
+					returnedServers := make(map[string]bool)
+					for _, server := range resp.Servers {
+						returnedServers[server.Server.Name] = true
+					}
+					for _, expectedServer := range tt.expectedServers {
+						assert.True(t, returnedServers[expectedServer], "Expected server %s to be in results", expectedServer)
+					}
+				}
+			} else if tt.expectedError != "" {
+				assert.Contains(t, w.Body.String(), tt.expectedError)
+			}
+		})
+	}
+}

@@ -27,6 +27,7 @@ type ServerFilter struct {
 	SubstringName *string    // for substring search on name
 	Version       *string    // for exact version matching
 	IsLatest      *bool      // for filtering latest versions only
+	ConfigType    *string    // for filtering by distribution type: "remote", "npm", "pypi", "oci", "nuget", or "mcpb"
 }
 
 // Database defines the interface for database operations
